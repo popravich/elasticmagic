@@ -7,6 +7,8 @@ containers:
       - !Py2Requirements requirements.txt      
       - !Py2Requirements requirements_geo.txt      
       - !Py2Requirements requirements_test.txt
+      - !Py2Install
+        - coverage
 
   py3-test:
     setup:
@@ -16,14 +18,30 @@ containers:
       - !Py3Requirements requirements.txt      
       - !Py3Requirements requirements_geo.txt      
       - !Py3Requirements requirements_test.txt
+      - !Py3Install
+        - coverage
 
 commands:
   py2-test: !Command
     description: Run tests with Python2
     container: py2-test
-    run: py.test
+    run: [py.test]
 
   py3-test: !Command
     description: Run tests with Python3
     container: py3-test
-    run: py.test
+    run: [py.test]
+
+  bench2: !Command
+    description: Run elasticmagic benchmarks (python2)
+    container: py2-test
+    environ:
+      PYTHONPATH: /work
+    run: [python2, benchmark/run.py]
+
+  bench3: !Command
+    description: Run elasticmagic benchmarks (python3)
+    container: py3-test
+    environ:
+      PYTHONPATH: /work
+    run: [python3, benchmark/run.py]

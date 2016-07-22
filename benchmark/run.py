@@ -23,6 +23,12 @@ from elasticmagic.types import (
 from elasticmagic.agg import Terms
 
 
+if not hasattr(time, 'monotonic'):
+    monotonic = time.time
+else:
+    monotonic = time.monotonic
+
+
 def setup():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(help='Valid commands')
@@ -96,12 +102,12 @@ def gen_sample(options):
             ('hits', gen_simple_document(options.size)),
             ))
 
-    def aggs_gen():
+    def aggs_gen(sub=True):
         return {
             "terms": {
                 "doc_count_error_upper_bound": 0,
                 "sum_other_doc_count": options.size,
-                "buckets": gen_terms_buckets(options.size),
+                "buckets": gen_terms_buckets(options.size, sub=sub),
                 },
             }
 
@@ -128,19 +134,25 @@ def run(options):
     cov = coverage.Coverage()
 
     times = OrderedDict.fromkeys(['data_load', 'json_loads', 'searchResult'])
-    start = time.monotonic() * 1000
+    start = monotonic() * 1000
 
     raw_data = options.input.read()
-    times['data_load'] = time.monotonic() * 1000 - start
-    start = time.monotonic() * 1000
+    times['data_load'] = monotonic() * 1000 - start
+    start = monotonic() * 1000
 
     raw_results = json.loads(raw_data)
-    times['json_loads'] = time.monotonic() * 1000 - start
+    times['json_loads'] = monotonic() * 1000 - start
 
     query = SearchQuery(MatchAll(),
                         doc_cls=SimpleDocument)
     if 'aggregations' in raw_results:
-        query = query.aggs(terms=Terms(SimpleDocument.integer_0))
+        query = query.aggs(
+            terms=Terms(SimpleDocument.integer_0,
+                        aggs={
+                            'sub-terms': Terms(SimpleDocument.integer_1)
+                            }
+                        )
+            )
     gc.disable()
     if options.profile:
         cov.start()
@@ -151,7 +163,7 @@ def run(options):
         query._aggregations,
         doc_cls=query._get_doc_cls(),
         instance_mapper=query._instance_mapper)
-    times['searchResult'] = time.monotonic() * 1000 - start
+    times['searchResult'] = monotonic() * 1000 - start
     if options.profile:
         prof.disable()
         cov.stop()
@@ -222,11 +234,16 @@ def gen_simple_document(N):
             }
 
 
-def gen_terms_buckets(N):
+def gen_terms_buckets(N, sub=True):
     for i in range(N):
         yield {
             "key": i,
             "doc_count": i,
+            "sub-terms": {
+                "doc_count_error_upper_bound": 0,
+                "sum_other_doc_count": 100,
+                "buckets": gen_terms_buckets(100, sub=False),
+                } if sub else {},
             }
 
 
